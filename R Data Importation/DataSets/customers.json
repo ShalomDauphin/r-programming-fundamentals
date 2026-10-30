@@ -1,0 +1,82 @@
+[
+  {
+    "customer_id": 1001,
+    "full_name": "Aline Mukamana",
+    "age": 29,
+    "gender": "Female",
+    "country": "Rwanda",
+    "city": "Kigali",
+    "annual_income": 4200000,
+    "customer_segment": "Retail"
+  },
+  {
+    "customer_id": 1002,
+    "full_name": "Eric Niyonzima",
+    "age": 41,
+    "gender": "Male",
+    "country": "Rwanda",
+    "city": "Huye",
+    "annual_income": 6800000,
+    "customer_segment": "Premium"
+  },
+  {
+    "customer_id": 1003,
+    "full_name": "Grace Uwase",
+    "age": 35,
+    "gender": "Female",
+    "country": "Uganda",
+    "city": "Kampala",
+    "annual_income": 5100000,
+    "customer_segment": "Retail"
+  },
+  {
+    "customer_id": 1004,
+    "full_name": "David Kamanzi",
+    "age": 52,
+    "gender": "Male",
+    "country": "Kenya",
+    "city": "Nairobi",
+    "annual_income": 9200000,
+    "customer_segment": "Premium"
+  },
+  {
+    "customer_id": 1005,
+    "full_name": "Diane Ingabire",
+    "age": 24,
+    "gender": "Female",
+    "country": "Rwanda",
+    "city": "Musanze",
+    "annual_income": 3100000,
+    "customer_segment": "Retail"
+  },
+  {
+    "customer_id": 1006,
+    "full_name": "Samuel Habimana",
+    "age": 63,
+    "gender": "Male",
+    "country": "Tanzania",
+    "city": "Arusha",
+    "annual_income": 7500000,
+    "customer_segment": "Premium"
+  },
+  {
+    "customer_id": 1007,
+    "full_name": "Chantal Uwera",
+    "age": 31,
+    "gender": "Female",
+    "country": "Rwanda",
+    "city": "Rubavu",
+    "annual_income": 4600000,
+    "customer_segment": "Retail"
+  },
+  {
+    "customer_id": 1008,
+    "full_name": "Patrick Mugisha",
+    "age": 45,
+    "gender": "Male",
+    "country": "Uganda",
+    "city": "Entebbe",
+    "annual_income": 8300000,
+    "customer_segment": "Premium"
+  }
+]

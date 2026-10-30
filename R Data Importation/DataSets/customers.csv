@@ -1,0 +1,9 @@
+customer_id,full_name,age,gender,country,city,annual_income,customer_segment
+1001,Aline Mukamana,29,Female,Rwanda,Kigali,4200000,Retail
+1002,Eric Niyonzima,41,Male,Rwanda,Huye,6800000,Premium
+1003,Grace Uwase,35,Female,Uganda,Kampala,5100000,Retail
+1004,David Kamanzi,52,Male,Kenya,Nairobi,9200000,Premium
+1005,Diane Ingabire,24,Female,Rwanda,Musanze,3100000,Retail
+1006,Samuel Habimana,63,Male,Tanzania,Arusha,7500000,Premium
+1007,Chantal Uwera,31,Female,Rwanda,Rubavu,4600000,Retail
+1008,Patrick Mugisha,45,Male,Uganda,Entebbe,8300000,Premium

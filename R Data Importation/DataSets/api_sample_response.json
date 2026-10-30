@@ -1,0 +1,24 @@
+{
+  "source": "Sample public API response for R practice",
+  "retrieved_at": "2025-06-08T10:00:00Z",
+  "data": [
+    {
+      "country": "Rwanda",
+      "year": 2024,
+      "indicator": "Population",
+      "value": 14000000
+    },
+    {
+      "country": "Uganda",
+      "year": 2024,
+      "indicator": "Population",
+      "value": 50000000
+    },
+    {
+      "country": "Kenya",
+      "year": 2024,
+      "indicator": "Population",
+      "value": 56000000
+    }
+  ]
+}
