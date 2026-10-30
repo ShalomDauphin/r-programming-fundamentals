@@ -1,0 +1,98 @@
+---
+title: "R for data science"
+output: html_document
+date: "2026-10-30"
+Aurthor: "Shalom Dauphin Nyarwaya"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+### Numeric
+
+```{r}
+x <- c(0.6, 0.9)
+age <- c (20,45,32,11)
+summary(age)
+```
+```{r}
+mean(age)
+```
+### logical
+```{r}
+x<- c(FALSE, TRUE)
+x<- c(T,F)
+```
+
+```{r}
+#integer
+X<- 9:29
+#complex
+x<-c(1+9i, 4+2i)
+
+#Matrix and operation within matrices
+(x<- matrix(1:6, nrow=3, ncol = 3))
+(x<- matrix(1:100, nrow=3, ncol = 3))
+
+(y<- matrix(1:6, nrow=3, ncol = 2))
+```
+
+### List
+
+```{r}
+(x<-list(1,'a', TRUE, 1+4i))
+
+```
+### Factor
+
+```{r}
+x<- factor(c("yes","yes","no","yes"))
+```
+
+### Create a vector with NAs in it
+
+```{r}
+x <- c(1, 2, NA, 10, 3) 
+is.na(x)
+x <- c(1, 2, 4, "NA", 5)  
+bad <- is.na(x)  
+print(bad) 
+
+x <- c(1, 2, 4, NA, 5)  
+bad <- is.na(x)  
+print(bad)
+
+x[!bad]
+
+```
+
+
+What if there are multiple R objects and you want to take the subset with no missing values in any of those objects?
+
+```{r}
+x <- c(1, 2, NA, 4, NA, 5) 
+y <- c("a", "b", NA, "d", NA, "f")  
+good <- complete.cases(x, y)  
+good
+```
