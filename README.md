@@ -4,6 +4,9 @@ A collection of practical lessons, exercises, and projects developed while learn
 # Student Information
 
 **Name**: Shalom Dauphin Nyarwaya
+
 **Student ID**: 20252MBI046
+
 **Programme**: Master of Science in Big Data Analytics
+
 **Institution**: Adventist University of Central Africa (AUCA)
