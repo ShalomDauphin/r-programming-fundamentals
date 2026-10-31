@@ -1,0 +1,126 @@
+---
+title: "ggplot 2 Assignment"
+author: "Shalom Dauphin"
+date: "2026-10-31"
+output: html_document
+---
+
+## ggplot2
+we are using a ToothGrowth data-set for practicing ggplot2 because it contains numerical and categorical variables
+
+## Load and explore the ToothGrowth dataset
+
+```{r}
+data("ToothGrowth")
+View(ToothGrowth)
+head(ToothGrowth)
+str(ToothGrowth)
+summary(ToothGrowth)
+```
+## Understanding the dataset
+
+the dataset contains 60 observations from an experiment investigating how different vitamin c delivery methods and doses affect tooth growth in guinea pigs.
+
+variable  Description                           data type
+len       Tooth Length                          Numeric
+supp      Supplement type(OJ or VC)             Categorical
+dose      Vitamin C dosage(0.5,1 or 2 mg/day)   Numeric
+
+OJ: orange Juice
+VC: Ascrobic acid(Vitamin c)
+
+
+
+## practising ggplot2 functions
+we first have to install the package and we load it using library function. 
+```{r}
+install.packages(c("ggplot2"))
+library(ggplot2)
+```
+## 1. geom_bar()
+Count the number of observations for each supplement type.
+```{r}
+ggplot(ToothGrowth,aes(x = supp)) + geom_bar(fill = "steelblue") + labs( title = "Number of Guinea pigs by supplement type", x = "Supplement Type", y = "frequency") + theme_minimal()
+```
+## 2. geom_boxplot()
+Compare tooth length across supplement types.
+```{r}
+ggplot(ToothGrowth, aes(x=supp,y=len)) + geom_boxplot(fill = "orange") + labs(title="Tooth length by supplement Type", x = "Supplement Type", y = "Tooth length") + theme_classic()
+```
+
+## 3. geom_density()
+Visualize the distribution of tooth lengths.
+
+```{r}
+ggplot(ToothGrowth,aes(x=len,fill=supp)) + geom_density(alpha=0.5)+ labs(title = "distribution of tooth length", x="tooth length", y="density") + theme_dark()
+```
+## 4. geom_histogram
+Display the frequency distribution of tooth length.
+
+```{r}
+ggplot(ToothGrowth,aes(x=len))+ geom_histogram(bins = 15, fill = "skyblue", color="black") + labs(title = "Distribution of Tooth length", x="tooth lenght", y = "frequency") + theme_classic()
+```
+
+
+## 5. geom_hline()
+
+Display the frequency distribution of tooth length.
+
+```{r}
+ggplot(ToothGrowth, aes(x = dose, y = len)) +
+  geom_point() + geom_hline( yintercept = mean(ToothGrowth$len), color = "red",linetype = "dashed" ) +labs( title = "Tooth Length by Vitamin C Dosage", x = "Dosage (mg/day)", y = "Tooth Length") +
+  theme_bw()
+```
+
+## 6. geom_jitter
+Display individual tooth length observations by supplement type.
+
+```{r}
+ggplot(ToothGrowth, aes(x = supp, y = len)) + geom_jitter( color = "purple", width = 0.15, size = 2 ) + labs( title = "Tooth Length Observations by Supplement", x = "Supplement Type", y = "Tooth Length" ) + theme_minimal()
+```
+
+## 7. geom_line
+Show how average tooth length changes with dosage for each supplement.
+```{r}
+ggplot(ToothGrowth, aes( x = dose, y = len, color = supp, group = supp )) + stat_summary(fun = mean, geom = "line", linewidth = 1) + labs( title = "Average Tooth Growth by Vitamin C Dosage", x = "Dosage (mg/day)", y = "Average Tooth Length", color = "Supplement" ) + theme_minimal()
+```
+
+## 8. geom_point
+Explore the relationship between dosage and tooth length.
+
+```{r}
+ggplot(ToothGrowth, aes(x = dose, y = len)) + geom_point(color = "blue", size = 3) + labs( title = "Vitamin C Dosage vs Tooth Length", x = "Dosage (mg/day)", y = "Tooth Length") + theme_minimal()
+```
+
+## 9.geom_rug
+Show the individual tooth length observations along the axis.
+
+```{r}
+ggplot(ToothGrowth, aes(x = len)) + geom_density(fill = "lightblue", alpha = 0.5) + geom_rug(color = "red") + labs( title = "Tooth Length Distribution with Rug Marks", x = "Tooth Length", y = "Density" ) + theme_minimal()
+```
+
+## 10. geom_smooth
+Show the trend between vitamin C dosage and tooth length.
+```{r}
+ggplot(ToothGrowth, aes(x = dose, y = len)) + geom_point() + geom_smooth( method = "lm", color = "red" ) + labs( title = "Trend Between Dosage and Tooth Length", x = "Dosage (mg/day)", y = "Tooth Length") + theme_minimal()
+```
+
+## 11. geom_text
+Label individual observations with their supplement type.
+
+```{r}
+ggplot(ToothGrowth, aes(x = dose, y = len))  + geom_text( aes(label = supp), vjust = -0.8, size = 3) +labs(title = "Tooth Length with Supplement Labels",x = "Dosage (mg/day)",y = "Tooth Length") +theme_minimal()
+```
+
+## 12. geom_violin
+Compare the distribution of tooth length for each supplement.
+
+```{r}
+ggplot(ToothGrowth, aes(x = supp, y = len)) + geom_violin(fill = "lightgreen") + labs(title = "Tooth Length Distribution by Supplement",x = "Supplement Type",y = "Tooth Length") + theme_minimal()
+```
+
+## 13. geom_vline()
+
+```{r}
+ggplot(ToothGrowth, aes(x = dose, y = len)) + geom_point() + geom_vline( xintercept = mean(ToothGrowth$dose), color = "red",linetype = "dashed") +labs( title = "Tooth Length by Vitamin C Dosage", x = "Dosage (mg/day)", y = "Tooth Length") +theme_minimal()
+```
