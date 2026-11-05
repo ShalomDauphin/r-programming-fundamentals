@@ -1,0 +1,344 @@
+---
+title: "Project I: World Population Trend and CO2 Emission"
+author: "Shalom Dauphin NYARWAYA (20252MBI046)"
+date: "11/4/2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 8, fig.height = 5)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(reshape2)
+
+# Folder that contains the two CSV files
+data_dir <- "."
+```
+
+# 4.1 Load the data
+
+```{r load}
+pop <- as.data.frame(readr::read_csv(file.path(data_dir, "world_population.csv"),
+                                     show_col_types = FALSE))
+
+# The "²" in two column names can break on some systems, so i gave them plain ASCII names
+names(pop)[grepl("^Area", names(pop))]    <- "Area_km2"
+names(pop)[grepl("^Density", names(pop))] <- "Density_km2"
+
+co2 <- read.csv(file.path(data_dir, "CO2_emission.csv"),
+                stringsAsFactors = FALSE)   # year columns become X1990 ... X2019
+```
+
+Two things to notice about the CO2 file:
+
+* It contains the **2019 column twice** (`X2019` and `X2019.1`, identical values), so we drop the copy.
+* The unit is **metric tons per capita**, not total tonnes.
+
+```{r co2-clean}
+#here we are checking if the two columns are identical,if they are we print true and we delete one by setting it to null
+all.equal(co2$X2019, co2$X2019.1)
+co2$X2019.1 <- NULL
+```
+
+# 4.2 Exploratory data analysis (World Population Dataset)
+
+```{r eda-basic}
+names(pop)                 # variable names
+head(pop, 5)               # top 5 rows
+tail(pop, 10)              # bottom 10 rows
+str(pop)                   # data types
+dim(pop)                   # shape (rows, columns)
+```
+
+## Duplicates and missing values
+
+```{r eda-dups}
+cat("Duplicate rows:", sum(duplicated(pop)), "\n")
+pop <- pop[!duplicated(pop), ]          # drop duplicates
+
+colSums(is.na(pop))                     # missing values per column
+```
+
+## Outliers (box plots)
+
+```{r eda-outliers, fig.height=6}
+quant_vars <- c("2022 Population", "Area_km2", "Density_km2",
+                "Growth Rate", "World Population Percentage")
+
+long <- pop |>
+  select(all_of(quant_vars)) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "value")
+
+p_box <- ggplot(long, aes(y = value)) +
+  geom_boxplot(fill = "steelblue", outlier.colour = "red") +
+  facet_wrap(~ variable, scales = "free_y", nrow = 1) +
+  labs(title = "Box plots of quantitative variables", y = NULL) +
+  theme_minimal() + theme(axis.text.x = element_blank())
+
+# Save this graph as a PNG in the working directory
+ggsave("boxplots.png", plot = p_box, width = 10, height = 6, dpi = 300)
+p_box   # show the graph in the report
+
+# How many outliers by the 1.5 x IQR rule?
+iqr_outliers <- sapply(quant_vars, function(v) {
+  x <- pop[[v]]; q <- quantile(x, c(.25, .75)); i <- diff(q)
+  sum(x < q[1] - 1.5 * i | x > q[2] + 1.5 * i)
+})
+iqr_outliers
+```
+
+### Handling missing values and outliers
+
+* **Missing values:** none were found.
+
+```{r outlier-handling}
+num_cols <- names(pop)[sapply(pop, is.numeric)]
+for (v in num_cols) pop[[v]][is.na(pop[[v]])] <- median(pop[[v]], na.rm = TRUE)
+
+pop <- pop |>
+  mutate(log_pop2022   = log10(`2022 Population`),
+         log_area      = log10(Area_km2),
+         log_density   = log10(Density_km2))
+```
+
+# 4.3 New variable: projected 2030 population
+
+The model is $N_t = P e^{rt}$ with $P$ = 2022 population and $t = 2030 - 2022 = 8$ years.
+
+```{r projection}
+t_years <- 2030 - 2022
+pop <- pop |>
+  mutate(r = log(`Growth Rate`),
+         pop_2030 = `2022 Population` * exp(r * t_years))
+
+pop |>
+  select(`Country/Territory`, `2022 Population`, `Growth Rate`, pop_2030) |>
+  arrange(desc(pop_2030)) |>
+  mutate(pop_2030 = round(pop_2030)) |>
+  head(10)
+```
+
+# 4.4 Top ten most populous countries
+
+```{r top10}
+top10 <- pop |> arrange(desc(`2022 Population`)) |> slice_head(n = 10)
+top10$`Country/Territory`
+```
+
+## 1. Population in 2022
+
+
+```{r top10-bar}
+p_top10_bar <- ggplot(top10, aes(x = reorder(`Country/Territory`, `2022 Population`),
+                  y = `2022 Population`)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(`2022 Population` / 1e6, 1)), hjust = -0.1, size = 3.5) +
+  coord_flip() +
+  scale_y_continuous(labels = label_number(scale = 1e-6, suffix = "M"),
+                     expand = expansion(mult = c(0, .12))) +
+  labs(title = "Ten most populous countries, 2022",
+       x = NULL, y = "Population (millions)") +
+  theme_minimal()
+
+# Save this graph as a PNG in the working directory
+ggsave("top10_population_2022.png", plot = p_top10_bar, width = 8, height = 5, dpi = 300)
+p_top10_bar   # show the graph in the report
+```
+
+## 2. Population trend 1990–2022
+
+The dataset only contains census-year snapshots (1990, 2000, 2010, 2015, 2020, 2022), not every year,
+so the trend is drawn through those points.
+
+```{r top10-trend}
+trend <- top10 |>
+  select(country = `Country/Territory`, `1990 Population`, `2000 Population`,
+         `2010 Population`, `2015 Population`, `2020 Population`, `2022 Population`) |>
+  pivot_longer(-country, names_to = "year", values_to = "population") |>
+  mutate(year = as.numeric(substr(year, 1, 4)))
+
+p_trend <- ggplot(trend, aes(year, population, colour = country)) +
+  geom_line(linewidth = 1) + geom_point() +
+  scale_y_log10(labels = label_number(scale = 1e-6, suffix = "M")) +
+  scale_x_continuous(breaks = unique(trend$year)) +
+  labs(title = "Population trend of the 10 most populous countries, 1990-2022",
+       subtitle = "Log scale so that smaller countries remain readable",
+       x = "Year", y = "Population (millions, log scale)", colour = NULL) +
+  theme_minimal()
+
+# Save this graph as a PNG in the working directory
+ggsave("population_trend_1990_2022.png", plot = p_trend, width = 8, height = 5, dpi = 300)
+p_trend   # show the graph in the report
+```
+
+## 3. CO2 emission trend 1990–2019
+
+The CO2 file uses World Bank country names, so a few names differ from the population file
+(for example *Russian Federation* vs *Russia*). We harmonise them first.
+
+```{r name-map}
+name_map <- c("Bahamas, The" = "Bahamas", "Brunei Darussalam" = "Brunei",
+  "Cabo Verde" = "Cape Verde", "Congo, Dem. Rep." = "DR Congo",
+  "Congo, Rep." = "Republic of the Congo", "Cote d'Ivoire" = "Ivory Coast",
+  "Egypt, Arab Rep." = "Egypt", "Gambia, The" = "Gambia",
+  "Hong Kong SAR, China" = "Hong Kong", "Iran, Islamic Rep." = "Iran",
+  "Korea, Dem. People's Rep." = "North Korea", "Korea, Rep." = "South Korea",
+  "Kyrgyz Republic" = "Kyrgyzstan", "Lao PDR" = "Laos",
+  "Macao SAR, China" = "Macau", "Micronesia, Fed. Sts." = "Micronesia",
+  "Russian Federation" = "Russia", "Sint Maarten (Dutch part)" = "Sint Maarten",
+  "Slovak Republic" = "Slovakia", "St. Kitts and Nevis" = "Saint Kitts and Nevis",
+  "St. Lucia" = "Saint Lucia", "St. Martin (French part)" = "Saint Martin",
+  "St. Vincent and the Grenadines" = "Saint Vincent and the Grenadines",
+  "Syrian Arab Republic" = "Syria", "Turkiye" = "Turkey",
+  "Venezuela, RB" = "Venezuela", "Virgin Islands (U.S.)" = "United States Virgin Islands",
+  "West Bank and Gaza" = "Palestine", "Yemen, Rep." = "Yemen")
+
+co2$Country <- ifelse(co2$Country.Name %in% names(name_map),
+                      name_map[co2$Country.Name], co2$Country.Name)
+
+# Names that still do not match (these are simply absent from one of the files)
+setdiff(co2$Country, pop$`Country/Territory`)
+```
+
+```{r co2-trend}
+co2_top <- co2 |>
+  filter(Country %in% top10$`Country/Territory`) |>
+  select(Country, starts_with("X")) |>
+  pivot_longer(-Country, names_to = "year", values_to = "co2") |>
+  mutate(year = as.numeric(sub("X", "", year)))
+
+p_co2_trend <- ggplot(co2_top, aes(year, co2, colour = Country)) +
+  geom_line(linewidth = 1) +
+  labs(title = "CO2 emissions of the 10 most populous countries, 1990-2019",
+       x = "Year", y = "CO2 emissions (metric tons per capita)", colour = NULL) +
+  theme_minimal()
+
+# Save this graph as a PNG in the working directory
+ggsave("co2_trend_1990_2019.png", plot = p_co2_trend, width = 8, height = 5, dpi = 300)
+p_co2_trend   # show the graph in the report
+```
+
+# 4.5 Correlation analysis
+
+## 1. Area, Density, Growth Rate and World Population Percentage
+
+```{r corr}
+vars <- pop |>
+  select(Area = Area_km2, Density = Density_km2,
+         Growth_Rate = `Growth Rate`, World_Pop_Pct = `World Population Percentage`)
+
+cor_p <- round(cor(vars, method = "pearson"), 2)
+cor_s <- round(cor(vars, method = "spearman"), 2)
+cor_p   # Pearson (sensitive to outliers)
+cor_s   # Spearman (rank based, robust to outliers)
+```
+
+```{r corr-heatmap}
+heat <- function(m, ttl) {
+  ggplot(melt(m), aes(Var1, Var2, fill = value)) +
+    geom_tile(colour = "white") +
+    geom_text(aes(label = value), size = 4) +
+    scale_fill_gradient2(low = "firebrick", mid = "white", high = "steelblue",
+                         midpoint = 0, limits = c(-1, 1)) +
+    labs(title = ttl, x = NULL, y = NULL, fill = "r") +
+    theme_minimal()
+}
+p_heat_pearson  <- heat(cor_p, "Pearson correlation heatmap")
+p_heat_spearman <- heat(cor_s, "Spearman correlation heatmap")
+
+# Save this graph as a PNG in the working directory
+ggsave("heatmap_pearson.png", plot = p_heat_pearson, width = 6, height = 5, dpi = 300)
+p_heat_pearson   # show the graph in the report
+
+# Save this graph as a PNG in the working directory
+ggsave("heatmap_spearman.png", plot = p_heat_spearman, width = 6, height = 5, dpi = 300)
+p_heat_spearman   # show the graph in the report
+```
+
+## 2. Population (2022) versus CO2 emissions (2019)
+
+```{r merge}
+merged <- pop |>
+  select(Country = `Country/Territory`, Continent, CCA3,
+         pop2022 = `2022 Population`) |>
+  inner_join(co2 |> select(Country, Region, co2_2019 = X2019), by = "Country") |>
+  filter(!is.na(co2_2019))
+
+dim(merged)
+head(merged)
+```
+
+```{r pop-co2-plot}
+p_pop_co2 <- ggplot(merged, aes(pop2022, co2_2019)) +
+  geom_point(aes(colour = Continent), alpha = .8, size = 2) +
+  geom_smooth(method = "lm", colour = "black", se = TRUE) +
+  scale_x_log10(labels = label_number(scale = 1e-6, suffix = "M")) +
+  labs(title = "Population (2022) vs per-capita CO2 emissions (2019)",
+       x = "Population, millions (log scale)",
+       y = "CO2 (metric tons per capita)") +
+  theme_minimal()
+
+# Save this graph as a PNG in the working directory
+ggsave("population_vs_co2.png", plot = p_pop_co2, width = 8, height = 5, dpi = 300)
+p_pop_co2   # show the graph in the report
+```
+
+```{r pop-co2-stats}
+cor.test(merged$pop2022, merged$co2_2019, method = "pearson")
+cor.test(merged$pop2022, merged$co2_2019, method = "spearman", exact = FALSE)
+
+fit <- lm(co2_2019 ~ log10(pop2022), data = merged)
+summary(fit)
+```
+
+**Interpretation.** Because the CO2 variable is *per capita*, a large population does not
+automatically mean higher per-capita emissions. The correlation is expected to be weak:
+per-capita emissions are driven mainly by income, energy mix and industrial structure, not by
+country size. Spearman and the log-scale regression are preferred over raw Pearson because
+population is extremely right-skewed.
+
+# 4.6 CO2 emissions by continent (2019)
+
+The 2019 values are summed by continent (continent comes from the population dataset).
+
+```{r continent}
+cont <- merged |>
+  group_by(Continent) |>
+  summarise(total_co2 = sum(co2_2019), n_countries = n()) |>
+  arrange(desc(total_co2))
+cont
+
+p_continent <- ggplot(cont, aes(reorder(Continent, -total_co2), total_co2, fill = Continent)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = round(total_co2, 1)), vjust = -0.4) +
+  labs(title = "Sum of 2019 CO2 emissions by continent",
+       x = NULL, y = "Sum of CO2 (metric tons per capita)") +
+  theme_minimal()
+
+# Save this graph as a PNG in the working directory
+ggsave("co2_by_continent_2019.png", plot = p_continent, width = 8, height = 5, dpi = 300)
+p_continent   # show the graph in the report
+```
+
+```{r answers, results='asis'}
+cat("1. **Highest emitting continent:** ", cont$Continent[1],
+    " (", round(cont$total_co2[1], 2), ")\n\n", sep = "")
+cat("2. **Third continent:** ", cont$Continent[3],
+    " — total ", round(cont$total_co2[3], 2), " metric tons per capita\n\n", sep = "")
+cat("3. **Last continent:** ", cont$Continent[nrow(cont)],
+    " — total ", round(cont$total_co2[nrow(cont)], 2), " metric tons per capita\n", sep = "")
+```
+
+```{r continent-mean}
+merged |>
+  group_by(Continent) |>
+  summarise(mean_co2 = round(mean(co2_2019), 2), n_countries = n()) |>
+  arrange(desc(mean_co2))
+```
