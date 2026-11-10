@@ -1,0 +1,158 @@
+---
+title: "Finding Errors in a Function with trace() and recover()"
+author: "Shalom Dauphin"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# 1. The functions
+
+`add_numbers()` adds any number of values by calling `add_two()` repeatedly. Two functions are used so that `recover()` has more than one call frame to show.
+
+```{r functions}
+add_two <- function(a, b) {
+  a + b
+}
+
+add_numbers <- function(...) {
+  nums  <- list(...)
+  total <- 0
+  for (n in nums) {
+    total <- add_two(total, n)
+  }
+  total
+}
+```
+
+A call with only numbers works:
+
+```{r works}
+add_numbers(1, 2, 3)
+```
+
+A call with a number passed as text fails. `tryCatch()` is used so the error is displayed without stopping the knit.
+
+```{r fails}
+tryCatch(
+  add_numbers(1, 2, "3"),
+  error = function(e) cat("Error:", conditionMessage(e), "\n")
+)
+```
+
+The message says something is wrong, but not which function or which value caused it.
+
+# 2. Find the error with trace()
+
+`trace()` adds a line of code to a function without editing it. Here it prints the inputs every time `add_two()` runs.
+
+```{r trace-on}
+trace("add_two",
+      quote(cat("add_two called with a =", a, " b =", b,
+                " | class(b):", class(b), "\n")),
+      print = FALSE)
+
+tryCatch(
+  add_numbers(1, 2, "3"),
+  error = function(e) cat("Error:", conditionMessage(e), "\n")
+)
+```
+
+The last call before the error shows `class(b): character`, so the third value, `"3"`, is the culprit.
+
+Remove the trace when finished:
+
+```{r untrace}
+untrace("add_two")
+```
+
+# 3. Find the error with recover()
+
+`recover()` freezes R at the moment of the error so you can look inside the functions. It needs a live R session, so the chunks below are set to `eval=FALSE`. **Run these lines in the R console, not when knitting.**
+
+```{r recover-on, eval=FALSE}
+options(error = recover)
+add_numbers(1, 2, "3")
+```
+
+R shows the call stack and a prompt:
+
+```
+Enter a frame number, or 0 to exit
+
+1: add_numbers(1, 2, "3")
+2: add_two(total, n)
+
+Selection:
+```
+
+Then:
+
+1. Type `2` and press Enter to go inside `add_two()`, where the error happened.
+2. Inspect the values:
+
+```{r inspect, eval=FALSE}
+ls()          # a, b
+a             # 3
+b             # "3"
+class(b)      # "character"  <- the problem
+```
+
+3. Type `c` to leave that frame, then `0` to exit.
+4. To check the caller instead, choose frame `1` and look at `nums` and `n`. You will see that `nums` holds `1`, `2` and `"3"`.
+
+Turn the automatic debugger off afterwards:
+
+```{r recover-off, eval=FALSE}
+options(error = NULL)
+```
+
+# 4. Combine both: stop only when something is wrong
+
+This makes `trace()` call `recover()` only when `b` is not numeric, so normal calls are not interrupted. Run it in the console.
+
+```{r combined, eval=FALSE}
+trace("add_two",
+      tracer = quote(if (!is.numeric(b)) recover()),
+      print = FALSE)
+
+add_numbers(1, 2, 3)       # runs normally, no interruption
+add_numbers(1, 2, "3")     # stops inside add_two() before the error
+
+untrace("add_two")
+```
+
+# 5. Fix the bug
+
+Once the cause is known, add input checks so the error message is clear:
+
+```{r fix}
+add_two <- function(a, b) {
+  stopifnot(is.numeric(a), is.numeric(b))
+  a + b
+}
+
+add_numbers(1, 2, 3)
+
+tryCatch(
+  add_numbers(1, 2, "3"),
+  error = function(e) cat("Error:", conditionMessage(e), "\n")
+)
+```
+
+# 6. Summary
+
+| Tool | What it does |
+|---|---|
+| `trace()` | Adds temporary code (such as printing inputs) to a function without editing it |
+| `untrace()` | Removes the added code |
+| `options(error = recover)` | Pauses at an error and lets you inspect any function in the call stack |
+| `options(error = NULL)` | Turns the automatic debugger off |
+| `stopifnot()` | Stops early with a clear message when an input is wrong |

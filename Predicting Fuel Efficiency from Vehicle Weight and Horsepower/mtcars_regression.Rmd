@@ -1,0 +1,270 @@
+---
+title: "Predicting Fuel Efficiency from Vehicle Weight and Horsepower: A Multiple Linear Regression Analysis of the mtcars Dataset"
+author: "Shalom Dauphin"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center")
+```
+
+**Work:** Find a data set to which you can fit a multiple linear regression and interpret your results.
+
+# 1. Functions
+
+Each step of the analysis is a small function so it can be tested and debugged separately.
+
+```{r functions}
+# ---------- 1. Load data ----------
+load_data <- function() {
+  df <- datasets::mtcars
+  stopifnot(is.data.frame(df), nrow(df) > 0)
+  df
+}
+
+# ---------- 2. Fit model ----------
+fit_model <- function(data, response = "mpg", predictors = c("wt", "hp")) {
+  stopifnot(is.data.frame(data),
+            is.character(response), length(response) == 1,
+            is.character(predictors), length(predictors) >= 2)
+
+  missing_cols <- setdiff(c(response, predictors), names(data))
+  if (length(missing_cols) > 0) {
+    stop("Column(s) not found in data: ", paste(missing_cols, collapse = ", "))
+  }
+
+  f <- as.formula(paste(response, "~", paste(predictors, collapse = " + ")))
+  lm(f, data = data)
+}
+
+# ---------- 3. Diagnostic plots ----------
+# file = NULL draws on the current device (used when knitting);
+# file = "name.png" also saves a large, high-resolution image.
+plot_diagnostics <- function(model, file = NULL) {
+  stopifnot(inherits(model, "lm"))
+
+  idx   <- which.max(abs(rstandard(model)))      # most extreme point
+  name  <- names(rstandard(model))[idx]
+  qq    <- qqnorm(rstandard(model), plot.it = FALSE)
+  style <- list(pch = 19, col = "steelblue", cex = 1.4, id.n = 0)
+
+  # Label placed ABOVE the point so it does not collide with the dots
+  add_label <- function(x, y) {
+    text(x, y, labels = name, pos = 3, offset = 0.9,
+         cex = 1, font = 2, xpd = TRUE)
+  }
+
+  draw_all <- function() {
+    do.call(plot, c(list(model, which = 1), style))
+    add_label(fitted(model)[idx], resid(model)[idx])
+
+    do.call(plot, c(list(model, which = 2), style))
+    add_label(qq$x[idx], qq$y[idx])
+
+    do.call(plot, c(list(model, which = 3), style))
+    add_label(fitted(model)[idx], sqrt(abs(rstandard(model)))[idx])
+
+    do.call(plot, c(list(model, which = 5), style))
+  }
+
+  if (!is.null(file)) {
+    png(file, width = 2400, height = 2000, res = 250)
+    op <- par(mfrow = c(2, 2), mar = c(5, 5, 4, 2))
+    draw_all()
+    par(op)
+    dev.off()
+  } else {
+    op <- par(mfrow = c(2, 2), mar = c(5, 5, 4, 2))
+    draw_all()
+    par(op)
+  }
+
+  invisible(file)
+}
+
+# ---------- 4. Assumption tests ----------
+run_tests <- function(model) {
+  stopifnot(inherits(model, "lm"))
+
+  if (!requireNamespace("car", quietly = TRUE)) {
+    stop("Package 'car' is needed. Install it with install.packages('car').")
+  }
+
+  list(
+    vif     = car::vif(model),
+    shapiro = shapiro.test(residuals(model))
+  )
+}
+```
+
+# 2. Data exploration
+
+```{r explore}
+mtcars_df <- load_data()
+head(mtcars_df)
+str(mtcars_df)
+summary(mtcars_df[, c("mpg", "wt", "hp")])
+cor(mtcars_df[, c("mpg", "wt", "hp")])
+```
+
+```{r pairs, fig.width=7, fig.height=7}
+pairs(mtcars_df[, c("mpg", "wt", "hp")],
+      pch = 19, col = "steelblue", cex = 1.3, cex.labels = 2)
+```
+
+# 3. Fit the multiple linear regression
+
+```{r model}
+model <- fit_model(mtcars_df)
+summary(model)
+confint(model)
+```
+
+# 4. Check the assumptions
+
+## 4.1 Diagnostic plots
+
+```{r diagnostics, fig.width=12, fig.height=10}
+plot_diagnostics(model)
+```
+
+To also save a high-resolution copy as an image file, run:
+
+```{r save-diagnostics, eval=FALSE}
+plot_diagnostics(model, file = "diagnostics.png")
+```
+
+## 4.2 Multicollinearity and normality
+
+```{r tests}
+tests <- run_tests(model)
+tests
+```
+
+# 5. Interpretation
+
+Replace the text below with your own interpretation after checking the output above.
+
+- **Intercept:** predicted mpg when weight and horsepower are both 0 (not meaningful in practice).
+- **wt:** holding horsepower constant, each additional 1,000 lbs is associated with a drop in mpg of about the estimated coefficient.
+- **hp:** holding weight constant, each additional horsepower is associated with a small drop in mpg.
+- **R² / adjusted R²:** the share of variation in mpg explained by the model.
+- **F-test:** whether the model as a whole predicts mpg better than no predictors.
+- **Assumptions:** discuss any curvature in Residuals vs Fitted, the Q-Q plot, the VIF values, the Shapiro-Wilk p-value, and influential cars.
+- **Caveats:** only 32 cars from 1974, and the results show association, not causation.
+
+# 6. Debugging the functions
+
+## 6.1 Automated test of all functions
+
+Runs each function with good and bad inputs and reports PASS, FAIL, or WARN. The bad-input rows **should** say FAIL with a clear message, which shows the validation works.
+
+```{r test-all}
+test_all <- function() {
+  results <- list()
+
+  check <- function(label, expr) {
+    out <- tryCatch({ force(expr); "PASS" },
+                    error   = function(e) paste("FAIL:", conditionMessage(e)),
+                    warning = function(w) paste("WARN:", conditionMessage(w)))
+    results[[label]] <<- out
+  }
+
+  d <- load_data()
+  m <- fit_model(d)
+
+  # Normal use
+  check("load_data()",                 load_data())
+  check("fit_model() good input",      fit_model(d))
+  check("plot_diagnostics() good",     plot_diagnostics(m, tempfile(fileext = ".png")))
+  check("run_tests() good",            run_tests(m))
+
+  # Deliberately bad input
+  check("fit_model() bad column",      fit_model(d, predictors = c("weight", "hp")))
+  check("fit_model() one predictor",   fit_model(d, predictors = "wt"))
+  check("fit_model() not a data.frame", fit_model(as.matrix(d)))
+  check("plot_diagnostics() not lm",   plot_diagnostics("not a model"))
+  check("run_tests() not lm",          run_tests(42))
+
+  data.frame(test = names(results), result = unlist(results), row.names = NULL)
+}
+
+test_all()
+```
+
+## 6.2 Catch an error and see where it came from
+
+`traceback()` only works interactively, so inside a knitted document we catch the error and print the call that caused it.
+
+```{r catch-error}
+tryCatch(
+  fit_model(mtcars_df, predictors = c("weight", "hp")),
+  error = function(e) {
+    cat("Error message:", conditionMessage(e), "\n")
+    cat("Raised in call:", deparse(conditionCall(e)), "\n")
+  }
+)
+```
+
+## 6.3 Switch debugging on and off for every function
+
+```{r debug-flags}
+fns <- c("load_data", "fit_model", "plot_diagnostics", "run_tests")
+
+invisible(lapply(fns, debug))            # turn debugging ON
+sapply(fns, isdebugged)                  # confirm
+invisible(lapply(fns, undebug))          # turn debugging OFF
+sapply(fns, isdebugged)                  # confirm it is off
+```
+
+## 6.4 Watch a function without editing it
+
+```{r trace-demo}
+trace("fit_model",
+      quote(cat("Fitting with predictors:", predictors, "\n")),
+      print = FALSE)
+invisible(fit_model(mtcars_df))
+untrace("fit_model")
+```
+
+## 6.5 Interactive debugging (run these in the R console, not when knitting)
+
+These open the `Browse[2]>` prompt, which needs a live R session, so the chunks are set to `eval=FALSE`.
+
+```{r interactive-debug, eval=FALSE}
+debugonce(load_data);        load_data()
+debugonce(fit_model);        m <- fit_model(mtcars)
+debugonce(plot_diagnostics); plot_diagnostics(m)
+debugonce(run_tests);        run_tests(m)
+```
+
+| Command | Action |
+|---|---|
+| `n` or Enter | run the next line |
+| `s` | step into a function call |
+| `c` | continue to the end of the function |
+| `Q` | quit the debugger |
+| `ls()` | list local variables |
+| `print(x)` | inspect a variable |
+
+Pause at an exact line by adding `browser()` inside a function, for example just before `lm()` in `fit_model()`. A conditional version, `if (anyNA(data)) browser()`, only stops when something is wrong.
+
+To enter the debugger automatically on any error, and to turn it off afterwards:
+
+```{r recover, eval=FALSE}
+options(error = recover)
+options(error = NULL)
+```
+
+# 7. Session information
+
+```{r session}
+sessionInfo()
+```
