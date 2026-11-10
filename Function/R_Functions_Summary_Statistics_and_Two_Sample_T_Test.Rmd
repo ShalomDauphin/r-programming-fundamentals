@@ -1,0 +1,241 @@
+---
+title: "R Functions for Summary Statistics and Two-Sample t-Test"
+author: "Shalom Dauphin"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+---
+
+# Introduction
+
+This document demonstrates how to write and use two R functions:
+
+1. A function that calculates descriptive summary statistics for a numeric variable.
+2. A function that performs an independent two-sample t-test to compare the means of two groups.
+
+The examples use sample data created in this document. You can replace the sample variables with variables from your own dataset.
+
+# 1. Function to Calculate Summary Statistics
+
+The `summary_stats()` function accepts a numeric variable and calculates:
+
+- Number of observations
+- Number of missing values
+- Mean
+- Median
+- Standard deviation
+- Variance
+- Minimum and maximum
+- Range
+- First and third quartiles
+
+Missing values are excluded from the calculations.
+
+```{r summary-function}
+summary_stats <- function(x) {
+
+  # Check that the input is numeric
+  if (!is.numeric(x)) {
+    stop("The input must be a numeric variable.")
+  }
+
+  # Remove missing values
+  x_clean <- x[!is.na(x)]
+
+  # Check that at least one valid observation exists
+  if (length(x_clean) == 0) {
+    stop("The variable contains no valid numeric observations.")
+  }
+
+  # Calculate summary statistics
+  results <- data.frame(
+    Statistic = c(
+      "Number of observations",
+      "Number of missing values",
+      "Mean",
+      "Median",
+      "Standard deviation",
+      "Variance",
+      "Minimum",
+      "Maximum",
+      "Range",
+      "First quartile (Q1)",
+      "Third quartile (Q3)"
+    ),
+    Value = c(
+      length(x_clean),
+      sum(is.na(x)),
+      mean(x_clean),
+      median(x_clean),
+      sd(x_clean),
+      var(x_clean),
+      min(x_clean),
+      max(x_clean),
+      diff(range(x_clean)),
+      as.numeric(quantile(x_clean, 0.25)),
+      as.numeric(quantile(x_clean, 0.75))
+    )
+  )
+
+  return(results)
+}
+```
+
+## 1.1 Apply the Function to a Variable
+
+First, create a numeric variable containing sample examination scores. The variable includes one missing value to demonstrate how the function handles missing data.
+
+```{r create-scores}
+exam_scores <- c(65, 72, 80, 75, 90, 68, 85, 78, 92, NA)
+
+# Display the variable
+exam_scores
+```
+
+Apply the `summary_stats()` function to the `exam_scores` variable:
+
+```{r apply-summary-function}
+score_summary <- summary_stats(exam_scores)
+
+# Display the results
+score_summary
+```
+
+The output displays the descriptive statistics for the examination scores. The missing value is counted but excluded from calculations such as the mean and standard deviation.
+
+# 2. Function to Perform a Two-Sample t-Test
+
+A two-sample t-test is used to determine whether there is a statistically significant difference between the means of two independent groups.
+
+The `two_sample_t_test()` function below accepts:
+
+- `group1`: Numeric observations for the first group.
+- `group2`: Numeric observations for the second group.
+- `alternative`: The alternative hypothesis (`"two.sided"`, `"less"`, or `"greater"`).
+- `var_equal`: Whether equal variances should be assumed. The default is `FALSE`, which uses Welch's t-test.
+- `conf_level`: The confidence level, defaulting to 95%.
+
+The function returns the t-test results.
+
+```{r t-test-function}
+two_sample_t_test <- function(group1,
+                              group2,
+                              alternative = "two.sided",
+                              var_equal = FALSE,
+                              conf_level = 0.95) {
+
+  # Check that both groups are numeric
+  if (!is.numeric(group1) || !is.numeric(group2)) {
+    stop("Both groups must be numeric.")
+  }
+
+  # Remove missing values from each group
+  group1 <- group1[!is.na(group1)]
+  group2 <- group2[!is.na(group2)]
+
+  # Check that each group has at least two observations
+  if (length(group1) < 2 || length(group2) < 2) {
+    stop("Each group must contain at least two valid observations.")
+  }
+
+  # Perform the independent two-sample t-test
+  test_result <- t.test(
+    x = group1,
+    y = group2,
+    alternative = alternative,
+    var.equal = var_equal,
+    conf.level = conf_level
+  )
+
+  return(test_result)
+}
+```
+
+## 2.1 Create Two Independent Samples
+
+Suppose we want to compare examination scores for students taught using two different teaching methods.
+
+```{r create-groups}
+method_A <- c(75, 80, 78, 85, 82, 77, 88, 79, 81, 84)
+
+method_B <- c(68, 72, 70, 75, 73, 69, 76, 71, 74, 67)
+
+# Display the two groups
+method_A
+method_B
+```
+
+## 2.2 Apply the Two-Sample t-Test Function
+
+Call the function using the two sample variables:
+
+```{r apply-t-test}
+t_test_results <- two_sample_t_test(
+  group1 = method_A,
+  group2 = method_B
+)
+
+# Display the complete t-test output
+t_test_results
+```
+
+## 2.3 Interpret the Results
+
+The two-sample t-test evaluates the following hypotheses:
+
+- **Null hypothesis (H0):** The population means of the two groups are equal.
+- **Alternative hypothesis (H1):** The population means of the two groups are different.
+
+The p-value is used to make the statistical decision. At a 5% significance level:
+
+- If the p-value is less than 0.05, reject the null hypothesis. There is statistically significant evidence of a difference between the group means.
+- If the p-value is greater than or equal to 0.05, do not reject the null hypothesis. There is insufficient evidence of a difference between the group means.
+
+The code below extracts the key results and produces an interpretation automatically.
+
+```{r interpret-t-test}
+alpha <- 0.05
+
+cat("Mean of Method A:", mean(method_A), "\n")
+cat("Mean of Method B:", mean(method_B), "\n")
+cat("t-statistic:", unname(t_test_results$statistic), "\n")
+cat("Degrees of freedom:", unname(t_test_results$parameter), "\n")
+cat("p-value:", t_test_results$p.value, "\n")
+cat("95% confidence interval:",
+    t_test_results$conf.int[1], "to",
+    t_test_results$conf.int[2], "\n\n")
+
+if (t_test_results$p.value < alpha) {
+  cat("Decision: Reject the null hypothesis.\n")
+  cat("Conclusion: There is a statistically significant difference",
+      "between the two group means.\n")
+} else {
+  cat("Decision: Do not reject the null hypothesis.\n")
+  cat("Conclusion: There is insufficient evidence of a statistically",
+      "significant difference between the two group means.\n")
+}
+```
+
+# 3. Using the Functions with Your Own Data
+
+You can use these functions with numeric variables from an imported dataset. For example, if your dataset is called `my_data` and contains a numeric column called `income`, run:
+
+```{r, eval=FALSE}
+# Summary statistics for one variable
+summary_stats(my_data$income)
+
+# Two-sample t-test comparing income between two groups
+two_sample_t_test(
+  group1 = my_data$income[my_data$gender == "Male"],
+  group2 = my_data$income[my_data$gender == "Female"]
+)
+```
+
+Make sure the two groups are independent and that the variable being tested is numeric. The standard two-sample t-test also assumes observations are independent; Welch's version (the default in this document) does not require equal population variances.
+
+# Conclusion
+
+This exercise demonstrates how to create reusable functions in R. The `summary_stats()` function calculates descriptive statistics for a numeric variable, while `two_sample_t_test()` compares the means of two independent groups. Defining functions makes analysis more consistent, reusable, and easier to apply to different datasets.
