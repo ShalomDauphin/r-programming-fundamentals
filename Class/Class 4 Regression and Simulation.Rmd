@@ -1,0 +1,364 @@
+---
+title: "Class 4: Regression and Simulation"
+author: "R for Data Science – Class Notes"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: readable
+    code_folding: show
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+# About this class
+
+Linear regression, model interpretation, diagnostics, random number generation, simulation, practice exercises and quick reference.
+
+These notes are organized as a standalone R Markdown lesson. Run the code chunks in order and use **Knit** in RStudio to generate the report.
+
+# 9. Linear regression
+
+Regression examines the relationship between an outcome (dependent variable) and one or more explanatory (independent) variables. It can be used to describe associations and make predictions.
+
+## 9.1 Main types of regression
+
+| Regression type | Typical use |
+|---|---|
+| Simple linear | Quantitative outcome and one predictor |
+| Multiple linear | Quantitative outcome and multiple predictors |
+| Polynomial | Curved relationship represented using powers of predictors |
+| Logistic | Categorical outcome |
+| Poisson | Count outcome |
+| Cox proportional hazards | Time-to-event outcome |
+| Nonlinear | Relationship described by a nonlinear model |
+| Robust | Model less sensitive to influential observations |
+
+## 9.2 Simple linear regression
+
+The simple linear regression equation is:
+
+\[
+Y = \beta_0 + \beta_1X + \epsilon
+\]
+
+Where:
+
+- \(Y\) is the response variable.
+- \(X\) is the explanatory variable.
+- \(\beta_0\) is the intercept.
+- \(\beta_1\) is the slope.
+- \(\epsilon\) is the error term.
+
+```{r simple-regression}
+data("women")
+
+fit <- lm(weight ~ height, data = women)
+summary(fit)
+
+plot(women$height, women$weight,
+     xlab = "Height (inches)",
+     ylab = "Weight (pounds)",
+     main = "Weight versus height")
+
+abline(fit, lwd = 2)
+```
+
+## 9.3 Fitted values and residuals
+
+A fitted value is the value predicted by the model. A residual is the difference between the observed and fitted value.
+
+\[
+e_i = y_i - \hat{y}_i
+\]
+
+```{r fitted-residuals}
+head(fitted(fit))
+head(residuals(fit))
+
+data.frame(
+  observed = women$weight,
+  fitted = fitted(fit),
+  residual = residuals(fit)
+)
+```
+
+## 9.4 Polynomial regression
+
+Polynomial regression can model a curved relationship by adding squared or higher-order terms.
+
+```{r polynomial-regression}
+fit_poly <- lm(weight ~ height + I(height^2), data = women)
+summary(fit_poly)
+
+plot(women$height, women$weight,
+     xlab = "Height",
+     ylab = "Weight",
+     main = "Linear and polynomial regression")
+
+lines(women$height, fitted(fit), lty = 2, lwd = 2)
+lines(women$height, fitted(fit_poly), lwd = 2)
+legend("topleft",
+       legend = c("Linear", "Polynomial"),
+       lty = c(2, 1),
+       bty = "n")
+```
+
+## 9.5 Multiple linear regression
+
+Multiple linear regression uses two or more explanatory variables.
+
+```{r multiple-regression}
+multiple_fit <- lm(mpg ~ wt + hp + cyl, data = mtcars)
+summary(multiple_fit)
+```
+
+## 9.6 Understanding regression output
+
+Important items in `summary(model)` include:
+
+- **Coefficients:** estimated intercept and slopes.
+- **Standard error:** uncertainty in each coefficient estimate.
+- **t value and p-value:** tests relating to individual coefficients.
+- **Residual standard error:** typical size of residuals, in outcome units.
+- **R-squared:** proportion of observed variation explained by the model.
+- **Adjusted R-squared:** R-squared adjusted for the number of predictors.
+- **F-statistic:** tests whether the model provides explanatory power beyond an intercept-only model.
+
+For a simple model such as `mpg ~ wt`, a negative slope means predicted MPG decreases as vehicle weight increases.
+
+## 9.7 Prediction
+
+```{r prediction}
+model <- lm(mpg ~ wt, data = mtcars)
+
+new_car <- data.frame(wt = 3.0)
+predict(model, newdata = new_car)
+
+# Prediction interval
+predict(model, newdata = new_car, interval = "prediction")
+```
+
+# 10. Regression assumptions and diagnostics
+
+Ordinary least squares (OLS) regression relies on assumptions for conventional inference.
+
+1. **Linearity:** the expected outcome is correctly represented by the model form.
+2. **Independence:** errors are independent.
+3. **Homoscedasticity:** residual variance is approximately constant.
+4. **Normality of residuals:** residuals are approximately normal for the usual small-sample inference procedures.
+
+```{r regression-diagnostics, fig.width=8, fig.height=7}
+model <- lm(mpg ~ wt, data = mtcars)
+par(mfrow = c(2, 2))
+plot(model)
+par(mfrow = c(1, 1))
+```
+
+Diagnostic plots help assess:
+
+- Residuals versus fitted values: patterns may indicate nonlinearity or unequal variance.
+- Normal Q-Q: substantial departures from the line may indicate non-normal residuals.
+- Scale-location: helps assess constant variance.
+- Residuals versus leverage: helps identify influential observations.
+
+Independence should also be assessed using knowledge of how the data were collected; it cannot be established from a plot alone.
+
+## 10.1 Potential corrective approaches
+
+Depending on the cause and context, possible approaches include:
+
+- Correcting data errors.
+- Investigating influential observations rather than automatically deleting them.
+- Transforming variables.
+- Adding justified predictors or nonlinear terms.
+- Considering a different model, such as robust regression.
+
+Model changes should be justified by subject-matter knowledge and diagnostics, not only by a desire to obtain a smaller p-value.
+
+# 11. Simulation and random number generation
+
+Simulation uses random numbers to represent uncertainty or examine how a statistical process behaves.
+
+## 11.1 Random number functions
+
+For the normal distribution:
+
+- `dnorm()` gives density values.
+- `pnorm()` gives cumulative probabilities.
+- `qnorm()` gives quantiles.
+- `rnorm()` generates random values.
+
+```{r normal-functions}
+dnorm(0)
+pnorm(2)
+qnorm(0.975)
+rnorm(10, mean = 20, sd = 2)
+```
+
+## 11.2 Setting a random seed
+
+`set.seed()` makes random simulations reproducible.
+
+```{r random-seed}
+set.seed(1)
+rnorm(5)
+
+set.seed(1)
+rnorm(5)
+```
+
+## 11.3 Sampling
+
+```{r sampling}
+set.seed(10)
+
+sample(1:10, size = 4)
+sample(letters, size = 5)
+sample(1:10)                         # Random permutation
+sample(1:10, size = 10, replace = TRUE)
+```
+
+## 11.4 Simulating a linear relationship
+
+The following example generates a predictor, random error and outcome using a known relationship.
+
+```{r simulate-linear-model}
+set.seed(20)
+
+n <- 100
+x <- rnorm(n)
+error <- rnorm(n, mean = 0, sd = 2)
+
+y <- 0.5 - 2 * x + error
+
+simulated_data <- data.frame(x, y)
+
+plot(y ~ x, data = simulated_data,
+     main = "Simulated linear relationship",
+     xlab = "Predictor X",
+     ylab = "Outcome Y")
+
+simulated_fit <- lm(y ~ x, data = simulated_data)
+abline(simulated_fit, lwd = 2)
+
+summary(simulated_fit)
+```
+
+The true intercept is 0.5 and the true slope is -2. The estimates from the simulated sample will usually be close to, but not exactly equal to, these values.
+
+# 12. Additional data visualization: labelled scatter plots
+
+The following example uses a small country-level dataset to demonstrate plotting two numerical variables and labelling points.
+
+```{r labelled-scatter}
+country_data <- data.frame(
+  country = c(
+    "Australia", "Austria", "Belgium", "Canada", "Denmark",
+    "Finland", "France", "Germany", "Greece", "Ireland",
+    "Italy", "Japan", "Netherlands", "New Zealand", "Norway",
+    "Portugal", "Spain", "Sweden", "Switzerland", "UK", "USA"
+  ),
+  income_inequality = c(
+    7.0, 4.8, 4.6, 5.6, 4.3, 3.7, 5.6, 5.2, 6.2, 6.0,
+    6.7, 3.4, 5.3, 6.8, 3.9, 8.0, 5.5, 4.0, 5.7, 7.2, 8.6
+  ),
+  health_social_index = c(
+    0.07, 0.01, -0.23, -0.07, -0.19, -0.43, 0.05, -0.06,
+    0.38, 0.25, -0.12, -1.26, -0.51, 0.29, -0.63, 1.18,
+    -0.30, -0.83, -0.46, 0.79, 2.02
+  )
+)
+
+plot(
+  health_social_index ~ income_inequality,
+  data = country_data,
+  pch = 19,
+  xlab = "Income inequality",
+  ylab = "Health and social problems index",
+  main = "Income inequality and health/social index"
+)
+
+text(
+  country_data$income_inequality,
+  country_data$health_social_index,
+  labels = country_data$country,
+  pos = 3,
+  cex = 0.65
+)
+
+labelled_model <- lm(
+  health_social_index ~ income_inequality,
+  data = country_data
+)
+
+abline(labelled_model, lwd = 2)
+
+cor(
+  country_data$income_inequality,
+  country_data$health_social_index
+)
+```
+
+# 13. Practice exercises
+
+Try these exercises after running the examples. Use the built-in datasets where possible.
+
+1. Create a numeric vector containing at least 10 values. Calculate its mean, median, variance, standard deviation and range.
+2. Create a data frame containing student ID, gender, age and examination score. Inspect it using `str()`, `head()` and `summary()`.
+3. Identify missing values in a vector and replace them with the mean of the non-missing observations.
+4. Use `mtcars` to create a histogram and boxplot for `mpg`.
+5. Convert `mtcars$cyl` into a factor and create a bar chart of cylinder categories.
+6. Use `iris` to compare mean petal length across species.
+7. Create a function that calculates the mean, median and standard deviation of a numeric vector.
+8. Write a function that performs a two-sample t-test and apply it to two groups.
+9. Use a `for` loop to print the squares of numbers from 1 to 10.
+10. Fit a simple linear regression model predicting `mpg` from `wt`. Interpret the slope and R-squared.
+11. Fit a multiple regression model predicting `mpg` using `wt`, `hp` and `cyl`.
+12. Run regression diagnostic plots and describe any patterns you observe.
+13. Simulate 100 observations from a linear model with random error. Fit a model and compare estimated coefficients with the values used to generate the data.
+
+# 14. Quick reference
+
+| Task | R function |
+|---|---|
+| Inspect structure | `str()` |
+| View first rows | `head()` |
+| Summary | `summary()` |
+| Mean / median | `mean()` / `median()` |
+| Standard deviation | `sd()` |
+| Frequency table | `table()` |
+| Missing values | `is.na()` |
+| Remove incomplete rows | `complete.cases()` |
+| Combine columns / rows | `cbind()` / `rbind()` |
+| Apply by matrix margin | `apply()` |
+| Apply to list elements | `lapply()` |
+| Grouped calculation | `tapply()` |
+| Histogram | `hist()` |
+| Boxplot | `boxplot()` |
+| Scatter plot | `plot()` |
+| Linear regression | `lm()` |
+| Model summary | `summary(model)` |
+| Fitted values / residuals | `fitted()` / `residuals()` |
+| Predictions | `predict()` |
+| Reproducible random numbers | `set.seed()` |
+
+# References
+
+The lesson sequence and examples in these notes are based on the following class publications:
+
+- [Class 1 – R for Data Science](https://rpubs.com/Mapara_lee/1434996)
+- [Class 2 – Data Management and Data Visualization](https://rpubs.com/Mapara_lee/1432408)
+- [Class 3 – Control Structures and Functions](https://rpubs.com/Mapara_lee/1434992)
+- [Class 4 – Regression and Simulation](https://rpubs.com/Mapara_lee/1436418)
+
+
+# Original RPubs class publications
+
+- [Class 1 – R for Data Science](https://rpubs.com/Mapara_lee/1434996)
+- [Class 2 – R for Data Science](https://rpubs.com/Mapara_lee/1432408)
+- [Class 3 – R for Data Science](https://rpubs.com/Mapara_lee/1434992)
+- [Class 4 – Linear Regression Simulation](https://rpubs.com/Mapara_lee/1436418)

@@ -1,0 +1,391 @@
+---
+title: "Class 2: Data Management, EDA and Visualization"
+author: "R for Data Science – Class Notes"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: readable
+    code_folding: show
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+# About this class
+
+Importing and inspecting data, data manipulation, descriptive statistics, quantitative and qualitative graphs, correlation and ggplot2.
+
+These notes are organized as a standalone R Markdown lesson. Run the code chunks in order and use **Knit** in RStudio to generate the report.
+
+# 3. Importing, inspecting and managing data
+
+## 3.1 Importing data
+
+Choose the import function according to the file format.
+
+```{r import-examples, eval=FALSE}
+# CSV file
+my_data <- read.csv("data/my_data.csv")
+
+# Text file
+my_text_data <- read.table("data/my_data.txt", header = TRUE)
+
+# Excel file (install and load readxl first)
+# install.packages("readxl")
+library(readxl)
+my_excel_data <- read_excel("data/my_data.xlsx")
+
+# Inspect imported data
+head(my_data)
+tail(my_data)
+str(my_data)
+summary(my_data)
+```
+
+Replace the example paths with the actual locations of your files. For Windows paths, use forward slashes or escaped backslashes.
+
+## 3.2 Useful inspection functions
+
+```{r inspect-data}
+data("airquality")
+head(airquality)
+tail(airquality)
+dim(airquality)
+names(airquality)
+str(airquality)
+summary(airquality)
+```
+
+Useful functions:
+
+- `head()` – first rows.
+- `tail()` – last rows.
+- `dim()` – number of rows and columns.
+- `names()` – variable names.
+- `str()` – structure and data types.
+- `summary()` – descriptive summaries.
+- `length()` – number of elements in a vector.
+
+## 3.3 Selecting rows and columns
+
+```{r selecting-data}
+head(airquality, 6)
+airquality[1:5, ]       # First five rows
+airquality[, "Temp"]    # One column
+airquality[10:20, ]     # Rows 10 to 20
+airquality[, -1]        # All columns except the first
+airquality$Wind         # Select a column using $
+```
+
+## 3.4 Combining data
+
+`cbind()` combines objects column-wise. The number of rows must match. `rbind()` combines objects row-wise, and the columns must be compatible.
+
+```{r combining-data}
+data_a <- data.frame(x = 1:3, group = c("A", "B", "C"))
+data_b <- data.frame(z = 3:1)
+
+cbind(data_a, data_b)
+
+new_row <- data.frame(x = 10, group = "D")
+rbind(data_a, new_row)
+```
+
+## 3.5 Creating a new variable
+
+The BMI formula is weight in kilograms divided by height in metres squared.
+
+```{r create-variable}
+# Example data
+people <- data.frame(
+  HEIGHT = c(161, 155, 158, 170, 160),
+  WEIGHT = c(50, 49, 42, 65, 60)
+)
+
+people$BMI <- round(
+  people$WEIGHT / (people$HEIGHT / 100)^2,
+  digits = 2
+)
+
+people
+summary(people$BMI)
+```
+
+Prefer `data$variable` or `with(data, ...)` over `attach()`, because `attach()` can make it unclear which object a variable comes from.
+
+## 3.6 Working with dates
+
+```{r dates}
+today <- Sys.Date()
+today
+format(today, "%B %d %Y")
+format(today, "%A")
+
+dob <- as.Date("2000-02-10")
+difftime(today, dob, units = "days")
+
+start_date <- as.Date("2020-02-13")
+end_date <- as.Date("2021-01-22")
+end_date - start_date
+```
+
+# 4. Exploratory data analysis and descriptive statistics
+
+Exploratory data analysis (EDA) helps us understand the structure, quality, distribution and relationships in a dataset before modelling.
+
+## 4.1 Summary statistics for quantitative variables
+
+```{r summary-statistics}
+data("mtcars")
+
+mean(mtcars$mpg)
+median(mtcars$mpg)
+sd(mtcars$mpg)
+var(mtcars$mpg)
+min(mtcars$mpg)
+max(mtcars$mpg)
+range(mtcars$mpg)
+quantile(mtcars$mpg)
+summary(mtcars$mpg)
+```
+
+## 4.2 A reusable summary function
+
+```{r summary-function}
+summary_stats <- function(x) {
+  c(
+    count = sum(!is.na(x)),
+    mean = mean(x, na.rm = TRUE),
+    median = median(x, na.rm = TRUE),
+    standard_deviation = sd(x, na.rm = TRUE),
+    minimum = min(x, na.rm = TRUE),
+    maximum = max(x, na.rm = TRUE)
+  )
+}
+
+summary_stats(mtcars$mpg)
+summary_stats(mtcars$wt)
+```
+
+## 4.3 Graphs for quantitative variables
+
+- **Histogram:** shows the frequency distribution of one numerical variable.
+- **Boxplot:** shows the median, quartiles, spread and potential outliers.
+- **Density plot:** displays a smoothed estimate of a distribution.
+- **Scatter plot:** examines the relationship between two numerical variables.
+- **Line graph:** shows change over an ordered sequence, commonly time.
+
+```{r quantitative-graphs, fig.width=7, fig.height=5}
+hist(mtcars$mpg,
+     main = "Distribution of miles per gallon",
+     xlab = "Miles per gallon")
+
+boxplot(mtcars$mpg,
+        main = "Boxplot of miles per gallon",
+        ylab = "MPG")
+
+plot(density(mtcars$mpg),
+     main = "Density of miles per gallon")
+
+plot(mtcars$wt, mtcars$mpg,
+     main = "Vehicle weight and fuel efficiency",
+     xlab = "Weight",
+     ylab = "Miles per gallon")
+```
+
+## 4.4 Graphs for qualitative variables
+
+Qualitative variables describe categories. Common graphs include:
+
+- **Bar chart:** compares category counts or proportions.
+- **Pie chart:** shows each category as a share of the whole.
+- **Grouped bar chart:** compares categories across groups.
+- **Stacked bar chart:** shows the composition of groups.
+- **Mosaic plot:** visualizes the relationship between categorical variables.
+
+```{r qualitative-graphs, fig.width=7, fig.height=5}
+mtcars$cyl_factor <- factor(mtcars$cyl)
+
+cylinder_counts <- table(mtcars$cyl_factor)
+cylinder_counts
+
+barplot(cylinder_counts,
+        main = "Cars by number of cylinders",
+        xlab = "Cylinders",
+        ylab = "Number of cars")
+
+pie(cylinder_counts,
+    main = "Proportion of cars by cylinders")
+
+transmission <- factor(
+  mtcars$am,
+  levels = c(0, 1),
+  labels = c("Automatic", "Manual")
+)
+
+cylinder_transmission <- table(mtcars$cyl_factor, transmission)
+
+barplot(cylinder_transmission,
+        beside = TRUE,
+        legend = TRUE,
+        main = "Transmission by cylinder group",
+        xlab = "Number of cylinders")
+```
+
+## 4.5 Relationship between a categorical and a quantitative variable
+
+A boxplot can compare the distribution of a numerical variable across categories.
+
+```{r categorical-quantitative}
+data(iris)
+
+boxplot(
+  Petal.Length ~ Species,
+  data = iris,
+  main = "Petal length by iris species",
+  xlab = "Species",
+  ylab = "Petal length"
+)
+
+by(iris$Petal.Length, iris$Species, mean)
+by(iris$Petal.Length, iris$Species, sd)
+by(iris$Petal.Length, iris$Species, summary)
+```
+
+## 4.6 Relationship between two categorical variables
+
+A contingency table counts observations for combinations of categories.
+
+```{r categorical-categorical}
+data(UCBAdmissions)
+ucba <- as.data.frame(UCBAdmissions)
+
+admission_table <- xtabs(Freq ~ Gender + Admit, data = ucba)
+admission_table
+
+# Row proportions
+prop.table(admission_table, margin = 1)
+
+# Visualize the table
+mosaicplot(admission_table,
+           main = "Admission by gender",
+           color = TRUE)
+```
+
+**Simpson's paradox** occurs when a trend in combined data disappears or reverses after the data are divided into meaningful subgroups. It is a reminder to examine relevant grouping variables rather than relying only on an overall comparison.
+
+## 4.7 Correlation and scatter plots
+
+Correlation measures the direction and strength of a linear association between two quantitative variables. Its value ranges from -1 to +1.
+
+```{r correlation}
+cor(mtcars$wt, mtcars$mpg)
+
+plot(mpg ~ wt, data = mtcars,
+     main = "Weight versus MPG",
+     xlab = "Weight",
+     ylab = "MPG")
+
+abline(lm(mpg ~ wt, data = mtcars), lwd = 2)
+```
+
+Correlation does not, by itself, establish causation.
+
+# 5. Data visualization with ggplot2
+
+`ggplot2` builds graphs by combining a dataset, aesthetic mappings and geometric layers using the `+` operator.
+
+```{r ggplot-setup}
+# Install once if needed:
+# install.packages("ggplot2")
+library(ggplot2)
+```
+
+## 5.1 Scatter plot
+
+```{r ggplot-scatter, fig.width=7, fig.height=5}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  labs(
+    title = "Vehicle weight and fuel efficiency",
+    x = "Weight",
+    y = "Miles per gallon"
+  ) +
+  theme_minimal()
+```
+
+## 5.2 Add a fitted regression line
+
+```{r ggplot-regression-line, fig.width=7, fig.height=5}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(title = "Linear relationship between weight and MPG") +
+  theme_minimal()
+```
+
+## 5.3 Boxplot and histogram
+
+```{r ggplot-box-hist, fig.width=7, fig.height=5}
+ggplot(iris, aes(x = Species, y = Petal.Length)) +
+  geom_boxplot() +
+  labs(title = "Petal length across species") +
+  theme_minimal()
+
+ggplot(mtcars, aes(x = mpg)) +
+  geom_histogram(bins = 10, color = "white") +
+  labs(title = "Distribution of MPG") +
+  theme_minimal()
+```
+
+## 5.4 Grouping and facets
+
+Grouping allows multiple categories to be displayed in one graph. Facets create separate panels for subsets of the data.
+
+```{r ggplot-grouping, fig.width=8, fig.height=5}
+mtcars$am_label <- factor(
+  mtcars$am,
+  levels = c(0, 1),
+  labels = c("Automatic", "Manual")
+)
+
+mtcars$cyl_label <- factor(mtcars$cyl)
+
+ggplot(mtcars, aes(x = hp, y = mpg, color = cyl_label)) +
+  geom_point(size = 2.5) +
+  facet_wrap(~ am_label) +
+  labs(
+    title = "Fuel efficiency by horsepower and transmission",
+    x = "Horsepower",
+    y = "Miles per gallon",
+    color = "Cylinders"
+  ) +
+  theme_minimal()
+```
+
+## 5.5 Useful ggplot2 geometries
+
+| Function | Purpose |
+|---|---|
+| `geom_bar()` | Bar chart |
+| `geom_col()` | Bar chart using supplied values |
+| `geom_boxplot()` | Boxplot |
+| `geom_density()` | Density plot |
+| `geom_histogram()` | Histogram |
+| `geom_jitter()` | Adds small position adjustments to points |
+| `geom_line()` | Line graph |
+| `geom_point()` | Scatter plot |
+| `geom_smooth()` | Adds a fitted smooth or model line |
+| `geom_violin()` | Violin plot |
+| `geom_text()` | Adds text labels |
+
+
+# Original RPubs class publications
+
+- [Class 1 – R for Data Science](https://rpubs.com/Mapara_lee/1434996)
+- [Class 2 – R for Data Science](https://rpubs.com/Mapara_lee/1432408)
+- [Class 3 – R for Data Science](https://rpubs.com/Mapara_lee/1434992)
+- [Class 4 – Linear Regression Simulation](https://rpubs.com/Mapara_lee/1436418)
