@@ -1,0 +1,202 @@
+---
+title: "Scenario II: Pathogen Bacteria Dataset"
+subtitle: "MSDA9113 - R for Data Science (Final Exam)"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+  word_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 8, fig.height = 4.5)
+library(dplyr); library(tidyr); library(readr); library(ggplot2); library(stringr)
+```
+
+> **How to use this file.** Set `data_file` below to the name of the exam dataset (CSV or Excel).
+> The column names are assumed from the exam paper: `bact_isolated, site, year, age, Var1-Var5, Sex,
+> Education, BoiledWater`. If your names differ, change them in the **rename** step only.
+> If the file is not found, the document builds **simulated demo data** so you can test the code.
+> Replace the simulated results with your own when you have the real file.
+
+# 1. Import the dataset into R
+
+```{r import}
+data_file <- "pathogen.csv"     # <- change to your file name (.csv or .xlsx)
+
+if (file.exists(data_file)) {
+  df <- if (grepl("\\.xlsx?$", data_file)) readxl::read_excel(data_file) else read_csv(data_file)
+  using_demo <- FALSE
+} else {
+  set.seed(123); n <- 600
+  df <- tibble(
+    bact_isolated = sample(c("E. coli", "Salmonella", "Shigella", "Vibrio cholerae", "Klebsiella"),
+                           n, replace = TRUE, prob = c(.35, .2, .15, .1, .2)),
+    site  = sample(c("Kigali", "Huye", "Musanze", "Rubavu"), n, replace = TRUE),
+    year  = sample(2010:2020, n, replace = TRUE),
+    age   = round(pmax(0, rnorm(n, 25, 18))),
+    Var2  = rnorm(n, 50, 10), Var3 = rnorm(n, 20, 5), Var4 = rnorm(n, 5, 2), Var5 = rnorm(n, 100, 15),
+    Sex   = sample(c("Male", "Female", "M", "female", NA), n, replace = TRUE),
+    Education = sample(c("None", "Primary", "Secondary", "University"), n, replace = TRUE),
+    BoiledWater = sample(c("Yes", "No"), n, replace = TRUE)
+  )
+  df$Var1 <- 10 + 0.3 * df$age + 0.5 * df$Var2 + rnorm(n, 0, 8)
+  df <- bind_rows(df, df[1:5, ])                     # add duplicates for the cleaning demo
+  using_demo <- TRUE
+}
+if (using_demo) cat("NOTE: simulated demo data are being used.\n")
+
+# Harmonise names here if your file uses different ones, e.g. rename(Age = age_years)
+names(df)[tolower(names(df)) == "age"] <- "Age"
+names(df)[tolower(names(df)) == "sex"] <- "Sex"
+head(df)
+```
+
+# 2. How many variables and observations?
+
+```{r dims}
+dim(df)
+cat("Observations (rows):", nrow(df), "\nVariables (columns):", ncol(df), "\n")
+str(df)
+```
+
+# 3. Clean the dataset
+
+```{r clean}
+colSums(is.na(df))                 # missing values
+sum(duplicated(df))                # duplicates
+
+df <- df %>%
+  distinct() %>%                                                    # remove duplicates
+  mutate(across(where(is.character), str_squish)) %>%               # remove extra spaces
+  mutate(Sex = case_when(str_to_lower(Sex) %in% c("m", "male") ~ "Male",
+                         str_to_lower(Sex) %in% c("f", "female") ~ "Female",
+                         TRUE ~ NA_character_)) %>%                 # harmonise Sex
+  filter(!is.na(bact_isolated), !is.na(Age), Age >= 0, Age <= 110)  # drop impossible / missing key values
+
+dim(df)
+```
+
+# 4. Prevalence of `bact_isolated` (bar chart)
+
+```{r prev}
+prev <- df %>% count(bact_isolated) %>% mutate(prevalence = round(n / sum(n) * 100, 1))
+prev
+ggplot(prev, aes(reorder(bact_isolated, -prevalence), prevalence, fill = bact_isolated)) +
+  geom_col(show.legend = FALSE) + geom_text(aes(label = paste0(prevalence, "%")), vjust = -0.3) +
+  labs(title = "Prevalence of isolated bacteria", x = "Bacteria isolated", y = "Prevalence (%)")
+```
+
+# 5. Side-by-side bar chart: distribution of `bact_isolated` by site
+
+```{r site}
+ggplot(df, aes(site, fill = bact_isolated)) + geom_bar(position = "dodge") +
+  labs(title = "Bacteria isolated by site", x = "Site", y = "Number of isolates", fill = "Bacteria")
+```
+
+# 6. Trend from 2014 for each bacteria (one graph)
+
+```{r trend}
+df %>% filter(year >= 2014) %>% count(year, bact_isolated) %>%
+  ggplot(aes(year, n, colour = bact_isolated)) + geom_line(linewidth = 1) + geom_point() +
+  labs(title = "Trend of each bacteria since 2014", x = "Year", y = "Number of isolates", colour = "Bacteria")
+```
+
+# 7. Young (under 16) versus adults (above 16)
+
+Outliers in age are removed **once**, before splitting, so the **same observations** are used for both
+groups and in every later analysis.
+
+```{r groups}
+q   <- quantile(df$Age, c(.25, .75), na.rm = TRUE); iqr <- q[2] - q[1]
+df_nout <- df %>% filter(Age >= q[1] - 1.5 * iqr, Age <= q[2] + 1.5 * iqr)
+cat("Removed outliers:", nrow(df) - nrow(df_nout), "\n")
+
+young  <- df_nout %>% filter(Age < 16)
+adults <- df_nout %>% filter(Age >= 16)
+cat("Young:", nrow(young), "| Adults:", nrow(adults), "| Total:", nrow(df_nout), "\n")
+stopifnot(nrow(young) + nrow(adults) == nrow(df_nout))     # nobody lost
+
+comp <- bind_rows(mutate(young, group = "Young (<16)"), mutate(adults, group = "Adults (>=16)")) %>%
+  count(group, bact_isolated) %>% group_by(group) %>% mutate(prevalence = n / sum(n) * 100) %>% ungroup()
+comp
+
+ggplot(comp, aes(bact_isolated, prevalence, fill = group)) + geom_col(position = "dodge") +
+  labs(title = "Bacteria prevalence: young vs adults", x = "Bacteria", y = "Prevalence (%)", fill = NULL)
+
+# Is the difference significant?
+chisq.test(table(bind_rows(mutate(young, g = "Young"), mutate(adults, g = "Adult"))[, c("g", "bact_isolated")]))
+```
+
+# 8. Model building
+
+All models use `df_nout` (same observations as step 7).
+
+## I. Multiple linear regression (Var1 ~ Age + Var2-Var5 + Sex + Education + BoiledWater)
+
+```{r m1}
+m1 <- lm(Var1 ~ Age + Var2 + Var3 + Var4 + Var5 + Sex + Education + BoiledWater, data = df_nout)
+summary(m1)
+```
+
+## II. Simple linear regression with Age only
+
+```{r m2}
+m2 <- lm(Var1 ~ Age, data = df_nout)
+summary(m2)
+```
+
+## III. Statistical significance of Age
+
+```{r sig}
+coef(summary(m2))["Age", ]
+confint(m2)["Age", ]
+```
+If the p-value for `Age` is **below 0.05**, Age is significantly associated with Var1. The slope tells
+how much Var1 changes for each extra year of age.
+
+## IV. Scatter plot with fitted line
+
+```{r scatter}
+ggplot(df_nout, aes(Age, Var1)) + geom_point(alpha = .5) + geom_smooth(method = "lm", colour = "red") +
+  labs(title = "Var1 versus Age", x = "Age (years)", y = "Var1")
+```
+**Patterns to describe:** direction (upward = positive relationship), strength (tight cloud = strong),
+shape (curve = not linear) and outliers.
+
+## V. Model assumptions (diagnostic plots)
+
+```{r diag, fig.height = 7}
+par(mfrow = c(2, 2)); plot(m2); par(mfrow = c(1, 1))
+shapiro.test(residuals(m2)[1:min(5000, length(residuals(m2)))])   # normality of residuals
+```
+- **Residuals vs Fitted:** random scatter around 0 = linearity and constant variance are fine.
+- **Normal Q-Q:** points on the line = residuals are normal.
+- **Scale-Location:** flat line = constant variance.
+- **Residuals vs Leverage:** points beyond Cook's distance lines = influential observations.
+
+## VI. Repeat with Var2 as predictor
+
+```{r m3}
+m3 <- lm(Var1 ~ Var2, data = df_nout)
+summary(m3)
+```
+
+## VII. Which model explains more variance in Var1?
+
+```{r compare}
+tibble(model = c("Var1 ~ Age", "Var1 ~ Var2"),
+       R2 = c(summary(m2)$r.squared, summary(m3)$r.squared),
+       adj_R2 = c(summary(m2)$adj.r.squared, summary(m3)$adj.r.squared),
+       p_value = c(coef(summary(m2))["Age", 4], coef(summary(m3))["Var2", 4]),
+       AIC = c(AIC(m2), AIC(m3)))
+```
+The model with the **higher R-squared** explains more of the variance in Var1.
+
+## VIII. Which predictor is stronger?
+
+The stronger predictor is the one with the **higher R-squared and the smaller p-value** (and the
+larger absolute t-value). Read the table above and state it in one sentence, for example:
+"Var2 is the stronger predictor (R2 = ..., p < 0.001) compared with Age (R2 = ..., p = ...)."

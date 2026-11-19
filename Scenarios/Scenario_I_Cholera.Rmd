@@ -1,0 +1,256 @@
+---
+title: "Scenario I: Cholera Outbreak Analysis"
+subtitle: "MSDA9113 - R for Data Science (Final Exam)"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+  word_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 8, fig.height = 4.5)
+library(dplyr); library(tidyr); library(readr); library(ggplot2)
+library(stringr); library(forcats); library(scales)
+```
+
+> **Important note about the data.** The file `data.csv` is the WHO country-level cholera table
+> (one row = one country in one year, 1949-2016). It is **not** a line list of individual patients,
+> so it has **no Age and no Sex columns**. Where the exam asks for age groups or sex, this report
+> explains what is not possible and uses the closest available grouping (WHO Region, Country, Year).
+> A ready-to-use template for a real line list is given in the Appendix.
+
+# 1. Import and first look
+
+```{r import}
+raw <- read_csv("data.csv", col_types = cols(.default = col_character()))
+names(raw)
+dim(raw)
+head(raw)
+```
+
+The dataset has **`r nrow(raw)` observations** and **`r ncol(raw)` variables**
+(Country, Year, Number of reported cases, Number of reported deaths, Case fatality rate, WHO Region).
+
+# 2. Q1: Identify data quality issues
+
+```{r quality}
+d <- raw %>%
+  rename(country = Country, year = Year, cases = `Number of reported cases of cholera`,
+         deaths = `Number of reported deaths from cholera`,
+         cfr = `Cholera case fatality rate`, region = `WHO Region`)
+
+# 1. Missing values
+colSums(is.na(d))
+
+# 2. Non-numeric text hiding in numeric columns
+non_numeric <- function(x) !is.na(x) & is.na(suppressWarnings(as.numeric(x)))
+d %>% filter(non_numeric(cases) | non_numeric(deaths) | non_numeric(cfr))
+
+# 3. Duplicates (same country and year)
+sum(duplicated(d[, c("country", "year")]))
+
+# 4. Logical errors after conversion
+d_num <- d %>% mutate(across(c(year, cases, deaths, cfr), ~ suppressWarnings(as.numeric(.x))))
+d_num %>% filter(deaths > cases)                                   # deaths > cases
+d_num %>% filter(!is.na(cases), cases > 0, !is.na(deaths), !is.na(cfr),
+                 abs(deaths / cases * 100 - cfr) > 0.1)             # CFR does not match
+d_num %>% filter(cfr > 100)                                        # impossible CFR
+d_num %>% filter(cases == 0, !is.na(cfr))                          # CFR with zero cases
+```
+
+**Issues found**
+
+1. **Missing values** in cases, deaths and CFR.
+2. **Text in numeric columns**: `"Unknown"` (Germany 2016) and a corrupted entry `"3 5"`, `"0 0"`, `"0.0 0.0"` (Iraq 2016).
+3. **Impossible value**: Italy 1998 has 2 cases, 9 deaths and CFR 450% (deaths are greater than cases).
+4. **CFR that does not match** deaths / cases (for example Zimbabwe 2009, and several 2005 records with CFR 0 despite deaths).
+5. **Zero-case rows** that still carry a CFR.
+6. **Gaps in years** per country (surveillance is not continuous), so totals across countries are not comparable year to year.
+7. Extreme skew and outliers (a few huge epidemics, for example India, Haiti and Peru dominate the totals).
+
+# 3. Q2 and Q3: Harmonise Sex and recode Age
+
+The dataset contains **no `Sex` and no `Age` variable**, so these steps cannot be done here.
+The equivalent harmonisation done on this file is **cleaning the numeric columns and recoding the
+`Year` into periods**, which plays the role of the age-group variable in the later analysis.
+
+```{r clean}
+clean <- d %>%
+  mutate(
+    cases  = ifelse(non_numeric(cases),  NA, as.numeric(cases)),
+    deaths = ifelse(non_numeric(deaths), NA, as.numeric(deaths)),
+    year   = as.numeric(year),
+    region = str_squish(region)
+  ) %>%
+  select(-cfr) %>%                               # recompute CFR ourselves
+  filter(!(country == "Italy" & year == 1998)) %>%   # impossible record (deaths > cases)
+  mutate(
+    cfr = ifelse(!is.na(cases) & cases > 0 & !is.na(deaths), deaths / cases * 100, NA),
+    period = cut(year, breaks = c(1948, 1969, 1989, 1999, 2009, 2016),
+                 labels = c("1949-1969", "1970-1989", "1990-1999", "2000-2009", "2010-2016"))
+  )
+
+cat("Rows kept:", nrow(clean), "\n")
+table(clean$period)
+```
+
+# 4. Q4: Statistical analyses for the Minister
+
+## 4a. Total cases and geographic distribution
+
+```{r total}
+total_cases <- sum(clean$cases, na.rm = TRUE)
+total_cases
+
+by_region <- clean %>% group_by(region) %>%
+  summarise(cases = sum(cases, na.rm = TRUE), deaths = sum(deaths, na.rm = TRUE), .groups = "drop") %>%
+  mutate(pct_of_cases = round(cases / sum(cases) * 100, 1)) %>% arrange(desc(cases))
+by_region
+
+top_countries <- clean %>% group_by(country) %>%
+  summarise(cases = sum(cases, na.rm = TRUE), deaths = sum(deaths, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(cases)) %>% slice_head(n = 10)
+top_countries
+```
+
+## 4b. Deaths and case fatality rate (CFR = deaths / cases x 100)
+
+```{r cfr}
+# Use only rows where BOTH cases and deaths are known, so the CFR is not biased
+known <- clean %>% filter(!is.na(cases), !is.na(deaths))
+overall <- known %>% summarise(cases = sum(cases), deaths = sum(deaths),
+                               CFR_percent = round(deaths / cases * 100, 2))
+overall
+
+cfr_region <- known %>% group_by(region) %>%
+  summarise(cases = sum(cases), deaths = sum(deaths), CFR_percent = round(deaths / cases * 100, 2),
+            .groups = "drop") %>% arrange(desc(CFR_percent))
+cfr_region
+```
+
+## 4c. Most and least affected groups (replacing age groups)
+
+Age groups are not in the file, so we rank **WHO Regions** and **periods**.
+
+```{r affected}
+by_region %>% slice(c(1, n()))        # most and least affected region
+clean %>% group_by(period) %>% summarise(cases = sum(cases, na.rm = TRUE), .groups = "drop") %>%
+  mutate(pct = round(cases / sum(cases) * 100, 1))
+```
+
+*Highlight on children:* not possible with this dataset (no age). See the Appendix for the code to use on a line list.
+
+## 4d. Gender distribution
+
+Not possible (no `Sex` variable). See the Appendix.
+
+## 4e. Are cases equal across groups? (chi-square goodness-of-fit)
+
+H0: cases are equally distributed. H1: they are not.
+
+```{r chisq}
+chisq.test(by_region$cases)                       # across WHO regions
+period_tot <- clean %>% group_by(period) %>% summarise(x = sum(cases, na.rm = TRUE)) %>% pull(x)
+chisq.test(period_tot)                            # across periods
+country_tot <- clean %>% group_by(country) %>% summarise(x = sum(cases, na.rm = TRUE)) %>% pull(x)
+chisq.test(country_tot)                           # across countries
+```
+
+With p-values far below 0.05 we **reject H0**: cases are **not** equally distributed across regions,
+periods or countries. (With counts this large, any difference is "significant", so look at the size
+of the differences in the tables above.)
+
+## 4f. Epidemic curve (cases per year)
+
+```{r curve}
+yearly <- clean %>% group_by(year) %>%
+  summarise(cases = sum(cases, na.rm = TRUE), deaths = sum(deaths, na.rm = TRUE), .groups = "drop")
+
+ggplot(yearly, aes(year, cases)) + geom_col(fill = "steelblue") +
+  scale_y_continuous(labels = comma) +
+  labs(title = "Epidemic curve: reported cholera cases per year", x = "Year", y = "Reported cases")
+yearly %>% arrange(desc(cases)) %>% slice_head(n = 5)
+```
+
+## 4g. Distribution by outcome and recovery rate
+
+The file has deaths only, so **survived = cases - deaths**, and the recovery rate is a proxy.
+
+```{r outcome}
+out <- known %>% summarise(Died = sum(deaths), Survived = sum(cases - deaths)) %>%
+  pivot_longer(everything(), names_to = "outcome", values_to = "n") %>%
+  mutate(pct = round(n / sum(n) * 100, 2))
+out
+```
+
+# 5. Q5: Figures
+
+```{r figs}
+ggplot(by_region, aes(fct_reorder(region, cases), cases, fill = region)) + geom_col(show.legend = FALSE) +
+  coord_flip() + scale_y_continuous(labels = comma) +
+  labs(title = "Reported cases by WHO region", x = NULL, y = "Cases")
+
+ggplot(top_countries, aes(fct_reorder(country, cases), cases)) + geom_col(fill = "firebrick") +
+  coord_flip() + scale_y_continuous(labels = comma) +
+  labs(title = "Top 10 countries by reported cases", x = NULL, y = "Cases")
+
+ggplot(cfr_region, aes(fct_reorder(region, CFR_percent), CFR_percent)) + geom_col(fill = "darkorange") +
+  coord_flip() + labs(title = "Case fatality rate by WHO region", x = NULL, y = "CFR (%)")
+
+clean %>% group_by(year, region) %>% summarise(cases = sum(cases, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(year, cases, colour = region)) + geom_line() + scale_y_continuous(labels = comma) +
+  labs(title = "Cases per year by WHO region", x = "Year", y = "Cases", colour = "Region")
+```
+
+# 6. Q6: Risk factors driving the outbreak
+
+With country-year data the "risk factors" are **region, period and country burden**. Because deaths
+out of cases is a count out of a total, we use a **binomial (logistic) regression** and report
+**odds ratios** for dying.
+
+```{r model}
+m_dat <- known %>% filter(deaths <= cases, cases > 0) %>%
+  mutate(region = relevel(factor(region), ref = "Europe"))
+
+fit <- glm(cbind(deaths, cases - deaths) ~ region + period, data = m_dat, family = binomial)
+summary(fit)
+
+est <- exp(cbind(OR = coef(fit), confint.default(fit)))
+round(est, 2)
+```
+
+**How to read:** OR above 1 = higher odds of dying than the reference group (Europe, 1949-1969);
+OR below 1 = lower; a 95% interval containing 1 = not significant.
+Because the data are overdispersed (countries differ a lot), treat the p-values as indicative.
+
+# 7. Q7: Recommendations
+
+1. **Fix reporting quality**: standard templates, mandatory numeric fields, validation (deaths cannot exceed cases), and no free-text such as "Unknown".
+2. **Collect line-list data** (age, sex, district, onset date, outcome) so children and gender can be analysed.
+3. **Focus resources on the highest-burden regions and countries** shown in the tables.
+4. **Reduce deaths where CFR is high** (above the 1% WHO target): ORS and IV fluids, treatment centres, trained staff.
+5. **Strengthen early detection**: rapid reporting, active case finding, lab confirmation.
+6. **WASH and prevention**: safe water, sanitation, hygiene promotion and oral cholera vaccination in hotspots.
+7. **Fill surveillance gaps**: many country-years are missing, so under-reporting is likely.
+
+# Appendix: template for a real line list (Age and Sex)
+
+Use this if your exam file has columns `age`, `sex`, `outcome`, `district` (set `eval = TRUE`).
+
+```{r appendix, eval=FALSE}
+df <- df %>%
+  mutate(sex = str_to_lower(str_trim(sex)),
+         sex = case_when(sex %in% c("m", "male", "1") ~ "Male",
+                         sex %in% c("f", "female", "2") ~ "Female", TRUE ~ NA_character_),
+         age_group = cut(age, breaks = c(-Inf, 4, 14, 24, 49, Inf),
+                         labels = c("<5", "5-14", "15-24", "25-49", "50+")))
+df %>% count(age_group) %>% mutate(pct = round(n / sum(n) * 100, 1))
+df %>% count(sex) %>% mutate(pct = round(n / sum(n) * 100, 1))
+chisq.test(table(df$age_group)); chisq.test(table(df$sex)); chisq.test(table(df$district))
+df$died <- ifelse(df$outcome == "Died", 1, 0)
+m <- glm(died ~ age_group + sex + district, data = df, family = binomial)
+exp(cbind(OR = coef(m), confint.default(m)))
+```
